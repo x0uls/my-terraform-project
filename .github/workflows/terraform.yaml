@@ -1,5 +1,5 @@
 name: "AWS Infrastructure"
-run-name: "Terraform: ${{ inputs.action || 'Push Update' }} by @${{ github.actor }}"
+run-name: "Terraform: ${{ inputs.action || github.event.head_commit.message }} by @${{ github.actor }}"
 
 on:
   push:

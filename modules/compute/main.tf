@@ -10,6 +10,10 @@ variable "private_subnets" {
   type = list(string)
 }
 
+variable "db_endpoint" {
+  type = string
+}
+
 resource "aws_security_group" "ec2_sg" {
   name        = "wordpress-ec2-sg"
   description = "Allow HTTP, SSH, MySQL from Anywhere"
@@ -102,6 +106,7 @@ resource "aws_lb_listener" "front_end" {
 
 resource "aws_launch_template" "wordpress" {
   name_prefix   = "wordpress-lt-"
+  update_default_version = true
   image_id      = "ami-043927849594c25e3" 
   instance_type = "t3.micro"
   key_name      = "wordpress-vockey-key"
@@ -117,10 +122,33 @@ resource "aws_launch_template" "wordpress" {
               #!/bin/bash
               set -x
               sleep 30
+
+              # 1. Install necessary tools
               export DEBIAN_FRONTEND=noninteractive
               apt-get update
-              apt-get install -y apache2 php libapache2-mod-php php-mysql
-              echo "Hello from WordPress Terraform" > /var/www/html/index.html
+              apt-get install -y apache2 php libapache2-mod-php php-mysql wget
+
+              # 2. Get WordPress
+              cd /var/www/html
+              rm -f index.html
+              wget https://wordpress.org/latest.tar.gz
+              tar -xzf latest.tar.gz --strip-components=1
+              cp wp-config-sample.php wp-config.php
+
+              # 3. SET VARIABLES (Injected by Terraform)
+              DB_HOST="${var.db_endpoint}"
+              LB_DNS="${aws_lb.main.dns_name}"
+
+              # 4. Update ONLY the Host in wp-config.php
+              # Using | as delimiter to avoid issues if DB_HOST has weird chars
+              sed -i "s|localhost|$DB_HOST|" wp-config.php
+
+              # 5. Handle the Load Balancer URL via wp-config.php
+              echo "define('WP_HOME','http://$LB_DNS');" >> wp-config.php
+              echo "define('WP_SITEURL','http://$LB_DNS');" >> wp-config.php
+
+              # 6. Finalize
+              chown -R www-data:www-data /var/www/html
               systemctl enable apache2
               systemctl start apache2
               EOF

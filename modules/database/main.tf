@@ -67,7 +67,7 @@ resource "aws_db_instance" "default" {
   multi_az               = false # Single-AZ Deployment
 
   # Config
-  identifier             = "wordpress-db-2"
+  identifier             = "wordpress-db"
   parameter_group_name   = "default.mysql8.0"
   skip_final_snapshot    = true
 
