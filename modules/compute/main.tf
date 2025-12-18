@@ -104,8 +104,8 @@ resource "aws_lb_listener" "front_end" {
 
 resource "aws_launch_template" "wordpress" {
   name_prefix   = "wordpress-lt-"
-  image_id      = "ami-0c7217cdde317cfec" # Ubuntu 22.04 LTS us-east-1 Example (Verify if region changes!)
-  instance_type = "t2.micro"
+  image_id      = "ami-043927849594c25e3" # Ubuntu 24.04 LTS (Or user specified)
+  instance_type = "t3.micro"
 
   vpc_security_group_ids = [aws_security_group.ec2_sg.id]
 
