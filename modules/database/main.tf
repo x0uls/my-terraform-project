@@ -45,7 +45,7 @@ resource "aws_db_subnet_group" "default" {
 
 resource "aws_db_instance" "default" {
   allocated_storage    = 10
-  snapshot_identifier  = "arn:aws:rds:us-east-1:730335232187:snapshot:wordpress-backup-db"
+  snapshot_identifier  = "wordpress-backup-kenny"
   instance_class       = "db.t4g.micro"
   engine               = "mysql"
   engine_version       = "8.0"
