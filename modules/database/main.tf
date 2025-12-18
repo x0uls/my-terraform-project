@@ -46,6 +46,9 @@ resource "aws_db_subnet_group" "default" {
 resource "aws_db_instance" "default" {
   allocated_storage    = 10
   snapshot_identifier  = "arn:aws:rds:us-east-1:730335232187:snapshot:wordpress-backup-db"
+  instance_class       = "db.t4g.micro"
+  engine               = "mysql"
+  engine_version       = "8.0"
   # db_name              = "wordpressdb"   # Restored from snapshot
   # username             = "admin"         # Restored from snapshot
   # password             = "password123"   # Restored from snapshot
