@@ -18,7 +18,7 @@ on:
 
 jobs:
   terraform:
-    name: "Terraform"
+    name: "Terraform Action: ${{ github.event.inputs.action || 'Create' }}"
     runs-on: ubuntu-latest
     defaults:
       run:
