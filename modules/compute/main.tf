@@ -48,6 +48,14 @@ resource "aws_security_group" "ec2_sg" {
     security_groups = [aws_security_group.alb_sg.id]
   }
 
+  ingress {
+    description = "SSH from anywhere (Debugging)"
+    from_port   = 22
+    to_port     = 22
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
   egress {
     from_port   = 0
     to_port     = 0
@@ -106,6 +114,7 @@ resource "aws_launch_template" "wordpress" {
   name_prefix   = "wordpress-lt-"
   image_id      = "ami-043927849594c25e3" # Ubuntu 24.04 LTS (Or user specified)
   instance_type = "t3.micro"
+  key_name      = "wordpress-vockey-key"
 
   vpc_security_group_ids = [aws_security_group.ec2_sg.id]
 
