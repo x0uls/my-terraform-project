@@ -45,12 +45,10 @@ resource "aws_db_subnet_group" "default" {
 
 resource "aws_db_instance" "default" {
   allocated_storage    = 10
-  db_name              = "wordpressdb"
-  engine               = "mysql"
-  engine_version       = "8.0"
-  instance_class       = "db.t3.micro"
-  username             = "admin"
-  password             = "password123" # In prod, use secrets manager!
+  snapshot_identifier  = "arn:aws:rds:us-east-1:730335232187:snapshot:wordpress-backup-db"
+  # db_name              = "wordpressdb"   # Restored from snapshot
+  # username             = "admin"         # Restored from snapshot
+  # password             = "password123"   # Restored from snapshot
   parameter_group_name = "default.mysql8.0"
   skip_final_snapshot  = true
   db_subnet_group_name = aws_db_subnet_group.default.name
