@@ -136,7 +136,7 @@ resource "aws_autoscaling_group" "bar" {
   max_size            = 3
   min_size            = 1
   target_group_arns   = [aws_lb_target_group.main.arn]
-  vpc_zone_identifier = var.private_subnets # Placing instances in private subnets
+  vpc_zone_identifier = var.public_subnets # Placing instances in public subnets for internet access
 
   launch_template {
     id      = aws_launch_template.wordpress.id
