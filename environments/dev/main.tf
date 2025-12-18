@@ -10,12 +10,11 @@ terraform {
     }
   }
 
-  # backend "s3" {
-  #   # Update this with your bucket name and key
-  #   # bucket = "my-terraform-state"
-  #   # key    = "dev/terraform.tfstate"
-  #   # region = "us-east-1"
-  # }
+  backend "s3" {
+    bucket = "kjc-wordpress-bucket"
+    key    = "dev/terraform.tfstate"
+    region = "us-east-1"
+  }
 }
 
 module "networking" {
