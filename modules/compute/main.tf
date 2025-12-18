@@ -111,10 +111,14 @@ resource "aws_launch_template" "wordpress" {
 
   user_data = base64encode(<<-EOF
               #!/bin/bash
+              set -x
+              sleep 30
+              export DEBIAN_FRONTEND=noninteractive
               apt-get update
               apt-get install -y apache2 php libapache2-mod-php php-mysql
               echo "Hello from WordPress Terraform" > /var/www/html/index.html
-              systemctl restart apache2
+              systemctl enable apache2
+              systemctl start apache2
               EOF
   )
 
