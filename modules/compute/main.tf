@@ -135,28 +135,33 @@ resource "aws_launch_template" "wordpress" {
               set -x
               sleep 30
 
-              # 1. Install necessary tools and dependencies
-              export DEBIAN_FRONTEND=noninteractive
-              apt-get update
-              apt-get install -y apache2 php libapache2-mod-php php-mysql wget php-xml php-curl unzip git
+              # 1. Install necessary tools and dependencies (Amazon Linux uses dnf/yum)
+              dnf update -y
+              dnf install -y httpd php php-mysqlnd php-xml php-curl wget unzip git
 
               # 2. Install Composer
-              curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
+              curl -sS https://getcomposer.org/installer | php
+              mv composer.phar /usr/local/bin/composer
+              chmod +x /usr/local/bin/composer
 
-              # 3. Get WordPress
+              # 3. Start Apache (httpd)
+              systemctl enable httpd
+              systemctl start httpd
+
+              # 4. Get WordPress
               cd /var/www/html
               rm -f index.html
               wget https://wordpress.org/latest.tar.gz
               tar -xzf latest.tar.gz --strip-components=1
               cp wp-config-sample.php wp-config.php
 
-              # 4. Install AWS SDK for PHP
-              cd /var/www/html
-              # Allow Composer to run as root (required for user_data)
+              # 5. Install AWS SDK for PHP
+              # Allow Composer to run as root
               export COMPOSER_ALLOW_SUPERUSER=1
-              composer require aws/aws-sdk-php
+              cd /var/www/html
+              /usr/local/bin/composer require aws/aws-sdk-php
 
-              # 5. Create Secrets Fetching Script
+              # 6. Create Secrets Fetching Script
               cat << 'PHP_EOF' > /var/www/html/aws-secrets.php
               <?php
               require __DIR__ . '/vendor/autoload.php';
@@ -203,7 +208,7 @@ resource "aws_launch_template" "wordpress" {
               ?>
               PHP_EOF
 
-              # 6. Configure wp-config.php to use the secrets script
+              # 7. Configure wp-config.php to use the secrets script
               # Remove the default define lines for DB constants
               sed -i "/define( 'DB_NAME'/d" wp-config.php
               sed -i "/define( 'DB_USER'/d" wp-config.php
@@ -213,15 +218,14 @@ resource "aws_launch_template" "wordpress" {
               # Inject require statement using a safer sed command (insert at line 2)
               sed -i "2i require_once __DIR__ . '/aws-secrets.php';" wp-config.php
 
-              # 7. Handle the Load Balancer URL via wp-config.php
+              # 8. Handle the Load Balancer URL via wp-config.php
               LB_DNS="${aws_lb.main.dns_name}"
               echo "define('WP_HOME','http://$LB_DNS');" >> wp-config.php
               echo "define('WP_SITEURL','http://$LB_DNS');" >> wp-config.php
 
-              # 8. Finalize
-              chown -R www-data:www-data /var/www/html
-              systemctl enable apache2
-              systemctl start apache2
+              # 9. Finalize Permissions (Amazon Linux uses 'apache' user)
+              chown -R apache:apache /var/www/html
+              chmod -R 755 /var/www/html
               EOF
   )
 
