@@ -152,19 +152,21 @@ resource "aws_launch_template" "wordpress" {
 
               # 4. Install AWS SDK for PHP
               cd /var/www/html
+              # Allow Composer to run as root (required for user_data)
+              export COMPOSER_ALLOW_SUPERUSER=1
               composer require aws/aws-sdk-php
 
               # 5. Create Secrets Fetching Script
               cat << 'PHP_EOF' > /var/www/html/aws-secrets.php
               <?php
-              require 'vendor/autoload.php';
+              require __DIR__ . '/vendor/autoload.php';
 
               use Aws\SecretsManager\SecretsManagerClient;
               use Aws\Exception\AwsException;
 
               $client = new SecretsManagerClient([
                   'version' => 'latest',
-                  'region'  => 'us-east-1', // Adjust if needed
+                  'region'  => 'us-east-1',
               ]);
 
               $secretName = 'wordpress-db-credentials';
@@ -174,8 +176,9 @@ resource "aws_launch_template" "wordpress" {
                       'SecretId' => $secretName,
                   ]);
               } catch (AwsException $e) {
-                  // Fallback or error handling
-                  error_log($e->getMessage());
+                  error_log('Secrets Manager Error: ' . $e->getMessage());
+                  http_response_code(500);
+                  echo 'Internal Server Error: Could not fetch database credentials. Check error logs.';
                   exit;
               }
 
@@ -186,6 +189,12 @@ resource "aws_launch_template" "wordpress" {
               }
 
               $creds = json_decode($secret, true);
+
+              if (!$creds) {
+                   error_log('Secrets Manager Error: JSON decode failed');
+                   http_response_code(500);
+                   exit;
+              }
 
               define('DB_NAME',     $creds['dbname']);
               define('DB_USER',     $creds['username']);
@@ -201,10 +210,8 @@ resource "aws_launch_template" "wordpress" {
               sed -i "/define( 'DB_PASSWORD'/d" wp-config.php
               sed -i "/define( 'DB_HOST'/d" wp-config.php
 
-              # Inject require statement at the top
-              sed -i "1s/^/<?php require_once 'aws-secrets.php'; ?>\n/" wp-config.php
-              # Remove the opening <?php from the original file since we added one
-              sed -i '2s/<?php//' wp-config.php
+              # Inject require statement using a safer sed command (insert at line 2)
+              sed -i "2i require_once __DIR__ . '/aws-secrets.php';" wp-config.php
 
               # 7. Handle the Load Balancer URL via wp-config.php
               LB_DNS="${aws_lb.main.dns_name}"
