@@ -32,6 +32,7 @@ module "compute" {
   public_subnets  = module.networking.public_subnets
   private_subnets = module.networking.private_subnets
   db_endpoint     = module.database.db_endpoint
+  db_secret_arn   = module.database.db_secret_arn
 }
 
 module "database" {

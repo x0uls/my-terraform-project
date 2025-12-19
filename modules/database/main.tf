@@ -10,6 +10,20 @@ variable "app_sg_id" {
     type = string
 }
 
+variable "db_username" {
+  description = "Database administrator username"
+  type        = string
+  sensitive   = true
+  default     = "admin"
+}
+
+variable "db_password" {
+  description = "Database administrator password"
+  type        = string
+  sensitive   = true
+  default     = "Admin123"
+}
+
 resource "aws_security_group" "db_sg" {
   name        = "wordpress-rds-sg"
   description = "Allow DB access"
@@ -68,10 +82,29 @@ resource "aws_db_instance" "default" {
 
   # Config
   identifier             = "wordpress-db"
+  username               = var.db_username
+  password               = var.db_password
   parameter_group_name   = "default.mysql8.0"
   skip_final_snapshot    = true
 
   tags = {
     Name = "wordpress-db"
   }
+}
+
+resource "aws_secretsmanager_secret" "db_secret" {
+  name = "wordpress-db-credentials"
+  description = "Database credentials for WordPress"
+  recovery_window_in_days = 0 
+}
+
+resource "aws_secretsmanager_secret_version" "db_secret_val" {
+  secret_id     = aws_secretsmanager_secret.db_secret.id
+  secret_string = jsonencode({
+    username = var.db_username
+    password = var.db_password
+    host     = aws_db_instance.default.address
+    port     = aws_db_instance.default.port
+    dbname   = aws_db_instance.default.db_name
+  })
 }

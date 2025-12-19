@@ -14,6 +14,14 @@ variable "db_endpoint" {
   type = string
 }
 
+variable "db_secret_arn" {
+  type = string
+}
+
+data "aws_iam_instance_profile" "lab_profile" {
+  name = "LabInstanceProfile"
+}
+
 resource "aws_security_group" "ec2_sg" {
   name        = "wordpress-ec2-sg"
   description = "Allow HTTP, SSH, MySQL from Anywhere"
@@ -113,6 +121,10 @@ resource "aws_launch_template" "wordpress" {
 
   # vpc_security_group_ids = [aws_security_group.ec2_sg.id] # Handled in network_interfaces below
 
+  iam_instance_profile {
+    name = data.aws_iam_instance_profile.lab_profile.name
+  }
+
   network_interfaces {
     associate_public_ip_address = true
     security_groups             = [aws_security_group.ec2_sg.id]
@@ -123,31 +135,83 @@ resource "aws_launch_template" "wordpress" {
               set -x
               sleep 30
 
-              # 1. Install necessary tools
+              # 1. Install necessary tools and dependencies
               export DEBIAN_FRONTEND=noninteractive
               apt-get update
-              apt-get install -y apache2 php libapache2-mod-php php-mysql wget
+              apt-get install -y apache2 php libapache2-mod-php php-mysql wget php-xml php-curl unzip git
 
-              # 2. Get WordPress
+              # 2. Install Composer
+              curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
+
+              # 3. Get WordPress
               cd /var/www/html
               rm -f index.html
               wget https://wordpress.org/latest.tar.gz
               tar -xzf latest.tar.gz --strip-components=1
               cp wp-config-sample.php wp-config.php
 
-              # 3. SET VARIABLES (Injected by Terraform)
-              DB_HOST="${var.db_endpoint}"
+              # 4. Install AWS SDK for PHP
+              cd /var/www/html
+              composer require aws/aws-sdk-php
+
+              # 5. Create Secrets Fetching Script
+              cat << 'PHP_EOF' > /var/www/html/aws-secrets.php
+              <?php
+              require 'vendor/autoload.php';
+
+              use Aws\SecretsManager\SecretsManagerClient;
+              use Aws\Exception\AwsException;
+
+              $client = new SecretsManagerClient([
+                  'version' => 'latest',
+                  'region'  => 'us-east-1', // Adjust if needed
+              ]);
+
+              $secretName = 'wordpress-db-credentials';
+
+              try {
+                  $result = $client->getSecretValue([
+                      'SecretId' => $secretName,
+                  ]);
+              } catch (AwsException $e) {
+                  // Fallback or error handling
+                  error_log($e->getMessage());
+                  exit;
+              }
+
+              if (isset($result['SecretString'])) {
+                  $secret = $result['SecretString'];
+              } else {
+                  $secret = base64_decode($result['SecretBinary']);
+              }
+
+              $creds = json_decode($secret, true);
+
+              define('DB_NAME',     $creds['dbname']);
+              define('DB_USER',     $creds['username']);
+              define('DB_PASSWORD', $creds['password']);
+              define('DB_HOST',     $creds['host']);
+              ?>
+              PHP_EOF
+
+              # 6. Configure wp-config.php to use the secrets script
+              # Remove the default define lines for DB constants
+              sed -i "/define( 'DB_NAME'/d" wp-config.php
+              sed -i "/define( 'DB_USER'/d" wp-config.php
+              sed -i "/define( 'DB_PASSWORD'/d" wp-config.php
+              sed -i "/define( 'DB_HOST'/d" wp-config.php
+
+              # Inject require statement at the top
+              sed -i "1s/^/<?php require_once 'aws-secrets.php'; ?>\n/" wp-config.php
+              # Remove the opening <?php from the original file since we added one
+              sed -i '2s/<?php//' wp-config.php
+
+              # 7. Handle the Load Balancer URL via wp-config.php
               LB_DNS="${aws_lb.main.dns_name}"
-
-              # 4. Update ONLY the Host in wp-config.php
-              # Using | as delimiter to avoid issues if DB_HOST has weird chars
-              sed -i "s|localhost|$DB_HOST|" wp-config.php
-
-              # 5. Handle the Load Balancer URL via wp-config.php
               echo "define('WP_HOME','http://$LB_DNS');" >> wp-config.php
               echo "define('WP_SITEURL','http://$LB_DNS');" >> wp-config.php
 
-              # 6. Finalize
+              # 8. Finalize
               chown -R www-data:www-data /var/www/html
               systemctl enable apache2
               systemctl start apache2
