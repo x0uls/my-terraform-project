@@ -145,10 +145,12 @@ resource "aws_launch_template" "wordpress" {
               # We append these lines to define the site URL dynamically based on the ALB
               LB_DNS="${aws_lb.main.dns_name}"
               
-              # Check if already defined effectively (though appending works if not defined or if we don't care about redefinition notice/failure handling for now, user asked to include it back)
-              # Simple append approach as requested:
-              echo "define('WP_HOME','http://$LB_DNS');" >> /var/www/html/wp-config.php
-              echo "define('WP_SITEURL','http://$LB_DNS');" >> /var/www/html/wp-config.php
+              # CRITICAL FIX: We must INSERT these lines BEFORE 'wp-settings.php' is included.
+              # Appending to the end of the file is too late.
+              # We insert them right after the opening <?php tag (line 1).
+              
+              sed -i "1a define('WP_HOME','http://$LB_DNS');" /var/www/html/wp-config.php
+              sed -i "1a define('WP_SITEURL','http://$LB_DNS');" /var/www/html/wp-config.php
               EOF
   )
 
