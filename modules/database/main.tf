@@ -93,7 +93,7 @@ resource "aws_db_instance" "default" {
 }
 
 resource "aws_secretsmanager_secret" "db_secret" {
-  name = "wordpress-db-credentials"
+  name = "wordpress-mysql"
   description = "Database credentials for WordPress"
   recovery_window_in_days = 0 
 }

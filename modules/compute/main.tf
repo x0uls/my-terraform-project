@@ -115,8 +115,8 @@ resource "aws_lb_listener" "front_end" {
 resource "aws_launch_template" "wordpress" {
   name_prefix   = "wordpress-lt-"
   update_default_version = true
-  image_id      = "ami-043927849594c25e3" 
-  instance_type = "t3.micro"
+  image_id      = "ami-0dc52b32bb54af3db" 
+  instance_type = "t3.large"
   key_name      = "wordpress-vockey-key"
 
   # vpc_security_group_ids = [aws_security_group.ec2_sg.id] # Handled in network_interfaces below
@@ -133,99 +133,13 @@ resource "aws_launch_template" "wordpress" {
   user_data = base64encode(<<-EOF
               #!/bin/bash
               set -x
-              sleep 30
-
-              # 1. Install necessary tools and dependencies (Amazon Linux uses dnf/yum)
-              dnf update -y
-              dnf install -y httpd php php-mysqlnd php-xml php-curl wget unzip git
-
-              # 2. Install Composer
-              curl -sS https://getcomposer.org/installer | php
-              mv composer.phar /usr/local/bin/composer
-              chmod +x /usr/local/bin/composer
-
-              # 3. Start Apache (httpd)
+              
+              # Minimal User Data for Baked AMI
+              # The AMI already contains WordPress, PHP, and the Secrets configuration.
+              # We just need to ensure the service starts.
+              
               systemctl enable httpd
               systemctl start httpd
-
-              # 4. Get WordPress
-              cd /var/www/html
-              rm -f index.html
-              wget https://wordpress.org/latest.tar.gz
-              tar -xzf latest.tar.gz --strip-components=1
-              cp wp-config-sample.php wp-config.php
-
-              # 5. Install AWS SDK for PHP
-              # Allow Composer to run as root
-              export COMPOSER_ALLOW_SUPERUSER=1
-              cd /var/www/html
-              /usr/local/bin/composer require aws/aws-sdk-php
-
-              # 6. Create Secrets Fetching Script
-              cat << 'PHP_EOF' > /var/www/html/aws-secrets.php
-              <?php
-              require __DIR__ . '/vendor/autoload.php';
-
-              use Aws\SecretsManager\SecretsManagerClient;
-              use Aws\Exception\AwsException;
-
-              $client = new SecretsManagerClient([
-                  'version' => 'latest',
-                  'region'  => 'us-east-1',
-              ]);
-
-              $secretName = 'wordpress-db-credentials';
-
-              try {
-                  $result = $client->getSecretValue([
-                      'SecretId' => $secretName,
-                  ]);
-              } catch (AwsException $e) {
-                  error_log('Secrets Manager Error: ' . $e->getMessage());
-                  http_response_code(500);
-                  echo 'Internal Server Error: Could not fetch database credentials. Check error logs.';
-                  exit;
-              }
-
-              if (isset($result['SecretString'])) {
-                  $secret = $result['SecretString'];
-              } else {
-                  $secret = base64_decode($result['SecretBinary']);
-              }
-
-              $creds = json_decode($secret, true);
-
-              if (!$creds) {
-                   error_log('Secrets Manager Error: JSON decode failed');
-                   http_response_code(500);
-                   exit;
-              }
-
-              define('DB_NAME',     $creds['dbname']);
-              define('DB_USER',     $creds['username']);
-              define('DB_PASSWORD', $creds['password']);
-              define('DB_HOST',     $creds['host']);
-              ?>
-              PHP_EOF
-
-              # 7. Configure wp-config.php to use the secrets script
-              # Remove the default define lines for DB constants
-              sed -i "/define( 'DB_NAME'/d" wp-config.php
-              sed -i "/define( 'DB_USER'/d" wp-config.php
-              sed -i "/define( 'DB_PASSWORD'/d" wp-config.php
-              sed -i "/define( 'DB_HOST'/d" wp-config.php
-
-              # Inject require statement using a safer sed command (insert at line 2)
-              sed -i "2i require_once __DIR__ . '/aws-secrets.php';" wp-config.php
-
-              # 8. Handle the Load Balancer URL via wp-config.php
-              LB_DNS="${aws_lb.main.dns_name}"
-              echo "define('WP_HOME','http://$LB_DNS');" >> wp-config.php
-              echo "define('WP_SITEURL','http://$LB_DNS');" >> wp-config.php
-
-              # 9. Finalize Permissions (Amazon Linux uses 'apache' user)
-              chown -R apache:apache /var/www/html
-              chmod -R 755 /var/www/html
               EOF
   )
 
